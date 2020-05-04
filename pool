@@ -1,0 +1,263 @@
+import requests
+import parsel
+from headers import retheaders
+import csv
+import os
+from redis import StrictRedis
+import time
+import threading
+
+
+item = []
+geturl = 'https://www.xicidaili.com/'  #ip获取地址
+filename = 'ip代理2.txt'  #文件名称
+db = 1   #rides的库name
+timeout = 3  #代理ip的可容错率
+start_timr = time.time()
+open_item = []
+t1 = []
+
+
+class Get_Check_Data_Ip(object):
+    def __init__(self, filename, geturl, db, timeout):
+        self.filename = filename
+        self.geturl = geturl
+        self.db = db
+        self.timeout = timeout
+
+
+    def getip(self):
+        if os.path.exists(self.filename):  # 如果文件存在
+            # 删除文件，可使用以下两种方法。
+            os.remove(self.filename)
+        else:
+            response = requests.get(self.geturl,headers = retheaders())
+            html = response.text
+            parse = parsel.Selector(html)
+            socket = parse.xpath('//td[3]//text()').extract()       #css比xpath好很多，xpth看的是网页结构不能变
+            ip = parse.xpath('//td[2]//text()').extract()
+
+            for i in range(100):
+                a = ':'
+                # with open('ip代理.csv', 'a', newline='') as f:      #可选择csv保存方式
+                #     csvwriter = csv.writer(f, delimiter=',')
+                #     csvwriter.writerow([ip[i], a, socket[i]])
+                with open(self.filename, 'a') as f:
+                    f.write(ip[i]+":"+socket[i]+'\n')
+            print('全部ip已经保存文件{}(未检测)'.format(self.filename))
+
+
+
+    def checkip(self):
+        print("正在进行检测")
+        temp = 0
+        with open(self.filename) as f:
+            lines = f.readlines()
+            for line in lines:
+                line = line.split('\\')[0].rstrip()
+                line = line.split('\\')[0].rstrip()
+                proxies = {
+                    'http': 'http://' + line,
+                    'https': 'https://' + line
+                }
+                try:  # 检测网站|
+                    response = requests.get('http://httpbin.org/get', headers=retheaders(), proxies=proxies,
+                                            timeout=self.timeout)
+                except:
+                    print("ip不可用:", line)
+                else:
+                    temp += 1
+                    item.append(line)
+                    print('ip可用:', line)
+            print("可用ip数",temp)
+            if os.path.exists('可用代理ip.txt'):  # 如果文件存在
+                os.remove('可用代理ip.txt')
+            with open('可用代理ip.txt', 'a') as f:  # 可用代理IP文件
+                f.write(str(temp) + "\n")
+            for it in item:
+                with open('可用代理ip.txt', 'a') as f:     #可用代理IP文件
+                    f.write(it+"\n")
+
+
+    def ip_data_rides(self):
+        temp = 1
+        redis = StrictRedis(host='localhost', port=6379, db=self.db)
+        with open('可用代理ip.txt') as f:
+            lines = f.readlines()
+            for line in lines:
+                line = line.split('\\')[0].rstrip()
+                redis.set(str(temp), line)
+                print("ip",redis.get(str(temp)),"已存入数据库Rides")
+                temp += 1
+
+
+
+
+class Get_Rides_Txt_data_ip():    #获取ip类
+
+    def get_rides_ip(): #获取rides
+        # with open('可用代理ip.txt') as f:
+        #     lines = f.readlines()
+        #     temp = int(lines[0])
+        redis = StrictRedis(host='localhost', port=6379, db=db)
+        temp = int(str(redis.get('1')).split('\'')[1])
+        for i in range(2,temp+2):
+            ipdata = str(redis.get(str(i)))
+            yield ipdata.split('\'')[1]
+
+
+    def get_txt_data():        #获取txt
+        with open('可用代理ip.txt') as f:
+            lines = f.readlines()
+            for line in lines:
+                line = line.split('\\')[0].rstrip()
+                proxies = {
+                    'http': 'http://' + line,
+                    'https': 'https://' + line
+                }
+                yield proxies      #生成器，生成一个列表套字典，ip地址都是有效的--直接在request中使用即可
+
+
+class cheack_thread():
+    def __init__(self,db):
+        self.db = db
+        with open('ip代理2.txt') as f:
+            lines = f.readlines()
+            for line in lines:
+                line = line.split('\\')[0].rstrip()
+                open_item.append(line)
+
+    def threa_one(self,item):
+        for i in range(1,99,5):
+            proxies = {
+                'http': 'http://' + item[i],
+                'https': 'https://' + item[i]
+            }
+            try:  # 检测网站|
+                response = requests.get('http://httpbin.org/get', headers=retheaders(), proxies=proxies,
+                                        timeout=3)
+            except:
+                print("ip不可用:", item[i])
+            else:
+                t1.append(item[i])
+                print('ip可用:', item[i])
+
+    def threa_two(self,item):
+        for i in range(2,99,5):
+            proxies = {
+                'http': 'http://' + item[i],
+                'https': 'https://' + item[i]
+            }
+            try:  # 检测网站|
+                response = requests.get('http://httpbin.org/get', headers=retheaders(), proxies=proxies,
+                                        timeout=3)
+            except:
+                print("ip不可用:", item[i])
+            else:
+                t1.append(item[i])
+                print('ip可用:', item[i])
+    def threa_three(self,item):
+        for i in range(3,99,5):
+            proxies = {
+                'http': 'http://' + item[i],
+                'https': 'https://' + item[i]
+            }
+            try:  # 检测网站|
+                response = requests.get('http://httpbin.org/get', headers=retheaders(), proxies=proxies,
+                                        timeout=3)
+            except:
+                print("ip不可用:", item[i])
+            else:
+                t1.append(item[i])
+                print('ip可用:', item[i])
+    def threa_four(self,item):
+        for i in range(4,99,5):
+            proxies = {
+                'http': 'http://' + item[i],
+                'https': 'https://' + item[i]
+            }
+            try:  # 检测网站|
+                response = requests.get('http://httpbin.org/get', headers=retheaders(), proxies=proxies,
+                                        timeout=3)
+            except:
+                print("ip不可用:", item[i])
+            else:
+                t1.append(item[i])
+                print('ip可用:', item[i])
+    def threa_five(self,item):
+        for i in range(5,99,5):
+            proxies = {
+                'http': 'http://' + item[i],
+                'https': 'https://' + item[i]
+            }
+            try:  # 检测网站|
+                response = requests.get('http://httpbin.org/get', headers=retheaders(), proxies=proxies,
+                                        timeout=3)
+            except:
+                print("ip不可用:", item[i])
+            else:
+                t1.append(item[i])
+                print('ip可用:', item[i])
+
+    def ip_data_rides(self,t1):
+        temp = 1
+        redis = StrictRedis(host='localhost', port=6379, db=self.db)
+        for line in t1:
+            redis.set(str(temp), line)
+            print("ip",redis.get(str(temp)),"已存入数据库Rides")
+            temp += 1
+
+    def run(self):  #5个线程，平均跑55秒
+        threa1 = threading.Thread(target=self.threa_one, args=(open_item,))
+        threa2 = threading.Thread(target=self.threa_two, args=(open_item,))
+        threa3 = threading.Thread(target=self.threa_three, args=(open_item,))
+        threa4 = threading.Thread(target=self.threa_four, args=(open_item,))
+        threa5 = threading.Thread(target=self.threa_five, args=(open_item,))
+
+        threa1.start()
+        threa2.start()
+        threa3.start()
+        threa4.start()
+        threa5.start()
+
+        threa1.join()
+        threa2.join()
+        threa3.join()
+        threa4.join()
+        threa5.join()
+
+        print(t1)
+        print('检查时间共:',time.time()-start_timr)
+        self.ip_data_rides(t1)
+
+
+
+
+
+
+
+
+def main():    #获取+存储的运行
+    if os.path.exists(filename):  # 如果文件存在
+        # 删除文件，可使用以下两种方法。
+        os.remove(filename)      #全部结束后删除中间代码
+    ip = Get_Check_Data_Ip(filename=filename,geturl=geturl,db=db,timeout=timeout)
+    ip.getip()
+    #ip.checkip()
+    ch = cheack_thread(db=db)
+    ch.run()
+    #ip.ip_data_rides()
+
+
+
+if __name__ == '__main__':    #使用前先运行
+     main()
+   #  grtdi = Get_Rides_Txt_data_ip
+   # # next(grtdi.get_rides_ip())
+   #  print(grtdi.get_txt_data())
+   #    #  print(i)
+   #      # 生成器，for队列表遍历
+
+
+
+#缺点:速度太慢，随着学习会逐步改进(提高方法，建立100个线程，同时对100个ip在同一时间进行检测。）
